@@ -1,0 +1,71 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default allow for now per user request
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // Question validation
+    function isValidQuestion(data) {
+      return data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.options is list && data.options.size() == 4 &&
+             data.correctIndex is int && data.correctIndex >= 0 && data.correctIndex <= 3;
+    }
+
+    // TestResult validation
+    function isValidTestResult(data) {
+      return data.projectName is string && data.projectName.size() > 0 &&
+             data.contractorName is string && data.contractorName.size() > 0 &&
+             data.supervisorName is string && data.supervisorName.size() > 0 &&
+             data.score is int && data.score >= 0 && data.score <= 100;
+    }
+
+    // Collections
+    match /projects/{projectId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /contractors/{contractorId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /questions/{questionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /testResults/{resultId} {
+      allow create: if isValidTestResult(incoming());
+      allow read, delete: if isAdmin();
+      allow update: if isAdmin() && (
+        // Action: Update training date
+        incoming().diff(resource.data).affectedKeys().hasOnly(['trainingDate'])
+      );
+    }
+
+    match /admins/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if false; // Only manageable via console or initial bootstrap
+    }
+  }
+}

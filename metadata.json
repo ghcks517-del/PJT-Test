@@ -1,0 +1,8 @@
+{
+  "name": "산업안전 관리감독자 사전 진단 시스템",
+  "description": "건설/제조 현장 협력업체 관리감독자를 위한 안전 테스트 및 이력 관리 시스템 (Firebase 기반)",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "건설/제조 프로젝트 정보",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "프로젝트 명"
+        }
+      },
+      "required": ["name"]
+    },
+    "Contractor": {
+      "title": "Contractor",
+      "description": "협력업체 정보",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "협력업체 명"
+        },
+        "projectId": {
+          "type": "string",
+          "description": "소속 프로젝트 ID"
+        }
+      },
+      "required": ["name", "projectId"]
+    },
+    "Question": {
+      "title": "Question",
+      "description": "안전 테스트 문항",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "description": "4지 선다형 옵션 리스트"
+        },
+        "correctIndex": {
+          "type": "integer"
+        }
+      },
+      "required": ["text", "options", "correctIndex"]
+    },
+    "TestResult": {
+      "title": "TestResult",
+      "description": "관리감독자 시험 결과 및 이력",
+      "type": "object",
+      "properties": {
+        "projectName": {
+          "type": "string"
+        },
+        "contractorName": {
+          "type": "string"
+        },
+        "supervisorName": {
+          "type": "string"
+        },
+        "trainingDate": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "score": {
+          "type": "integer"
+        },
+        "submittedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["projectName", "contractorName", "supervisorName", "trainingDate", "score"]
+    }
+  },
+  "firestore": {
+    "projects": {
+      "schema": "Project",
+      "description": "프로젝트 목록"
+    },
+    "contractors": {
+      "schema": "Contractor",
+      "description": "협력업체 목록"
+    },
+    "questions": {
+      "schema": "Question",
+      "description": "시험 문제 은행"
+    },
+    "testResults": {
+      "schema": "TestResult",
+      "description": "시험 결과 데이터"
+    }
+  }
+}
