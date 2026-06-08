@@ -256,19 +256,28 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
           >
             {/* Header */}
             <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/80 backdrop-blur-md">
-              <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-8">
-                <div className="flex items-center gap-6">
+              <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 md:flex-row md:items-center md:justify-between md:px-8">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-2 md:border-0 md:pb-0">
                   <div className="flex items-center gap-3">
                     <div className="rounded-lg bg-gray-900 p-2 text-white">
                       <BarChart3 className="h-5 w-5" />
                     </div>
                     <h1 className="text-xl font-bold text-gray-900">관리자 대시보드</h1>
                   </div>
-                  <nav className="hidden items-center gap-1 md:flex">
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-200 md:hidden"
+                  >
+                    <LogOut className="h-4 w-4" /> 로그아웃
+                  </button>
+                </div>
+                
+                <div className="flex flex-1 items-center justify-between md:ml-4">
+                  <nav className="flex w-full items-center gap-1 overflow-x-auto pb-1 md:w-auto md:pb-0">
                     <button
                       onClick={() => setActiveTab('results')}
                       className={cn(
-                        "rounded-lg px-4 py-2 text-sm font-bold transition-all",
+                        "rounded-lg px-4 py-2 text-sm font-bold transition-all whitespace-nowrap",
                         activeTab === 'results' ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
                       )}
                     >
@@ -277,25 +286,26 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                     <button
                       onClick={() => setActiveTab('meta')}
                       className={cn(
-                        "rounded-lg px-4 py-2 text-sm font-bold transition-all",
+                        "rounded-lg px-4 py-2 text-sm font-bold transition-all whitespace-nowrap",
                         activeTab === 'meta' ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
                       )}
                     >
                       기본 정보 관리
                     </button>
                   </nav>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="hidden flex-col items-end md:flex">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">ADMIN MODE ACTIVE</span>
-                    <span className="text-sm font-medium text-gray-600">Local Management</span>
+
+                  <div className="hidden items-center gap-4 md:flex">
+                    <div className="flex flex-col items-end">
+                      <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">ADMIN MODE ACTIVE</span>
+                      <span className="text-sm font-medium text-gray-600">Local Management</span>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-200"
+                    >
+                      <LogOut className="h-4 w-4" /> 로그아웃
+                    </button>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm font-bold text-gray-600 transition-colors hover:bg-gray-200"
-                  >
-                    <LogOut className="h-4 w-4" /> 로그아웃
-                  </button>
                 </div>
               </div>
             </header>
