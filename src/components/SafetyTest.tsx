@@ -37,12 +37,22 @@ export default function SafetyTest({ onComplete, onBack }: SafetyTestProps) {
       try {
         const projSnapshot = await getDocs(collection(db, 'projects'));
         const contSnapshot = await getDocs(collection(db, 'contractors'));
+        const qSnapshot = await getDocs(collection(db, 'questions'));
 
         setProjects(projSnapshot.docs.map(d => d.data().name || d.id));
         setContractors(contSnapshot.docs.map(d => d.data().name || d.id));
         
+        let allQuestions = qSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+        if (allQuestions.length === 0) {
+          // seed from SAFETY_QUESTIONS
+          for (const q of SAFETY_QUESTIONS) {
+             const docRef = await addDoc(collection(db, 'questions'), q);
+             allQuestions.push({ id: docRef.id, ...q });
+          }
+        }
+
         // 전체 문제 중 20문제 랜덤 추출
-        const shuffled = [...SAFETY_QUESTIONS].sort(() => 0.5 - Math.random());
+        const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
         setQuestions(shuffled.slice(0, 20));
       } catch (error) {
         console.error("Error fetching data:", error);

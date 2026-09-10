@@ -2,12 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   BarChart3, Download, Search, Edit2, Trash2, LogOut, 
-  Settings, Users, ShieldAlert, X, ChevronLeft, Save
+  Settings, Users, ShieldAlert, X, ChevronLeft, Save, Plus
 } from 'lucide-react';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
 import { db } from '../lib/firebase';
-import { collection, getDocs, setDoc, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, setDoc, doc, deleteDoc, updateDoc, addDoc } from 'firebase/firestore';
+import { SAFETY_QUESTIONS } from '../constants/questions';
+
+interface TestDetail {
+  questionText: string;
+  options: string[];
+  selected: number;
+  correctIndex: number;
+  isCorrect: boolean;
+}
 
 interface TestResult {
   id: string;
@@ -17,6 +26,7 @@ interface TestResult {
   trainingDate: string;
   score: number;
   submittedAt: string;
+  details?: TestDetail[];
 }
 
 export default function AdminDashboard({ onBack }: { onBack: () => void }) {
@@ -26,13 +36,24 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
   const [results, setResults] = useState<TestResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [filterProject, setFilterProject] = useState('');
+  const [filterContractor, setFilterContractor] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState('');
+  const [detailsModalResult, setDetailsModalResult] = useState<TestResult | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'results' | 'meta'>('results');
+  const [activeTab, setActiveTab] = useState<'results' | 'meta' | 'questions'>('results');
   const [metaData, setMetaData] = useState<{ projects: string[], contractors: string[] }>({ projects: [], contractors: [] });
   const [newProject, setNewProject] = useState('');
   const [newContractor, setNewContractor] = useState('');
+  
+  const [questions, setQuestions] = useState<{ id: string, text: string, options: string[], correctIndex: number }[]>([]);
+  const [qSearch, setQSearch] = useState('');
+  const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
+  const [qFormText, setQFormText] = useState('');
+  const [qFormOptions, setQFormOptions] = useState<string[]>(['', '', '', '']);
+  const [qFormCorrectIndex, setQFormCorrectIndex] = useState(0);
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -51,6 +72,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
       setIsAuthenticated(true);
       fetchResults();
       fetchMeta();
+      fetchQuestions();
     } else {
       setConfirmDialog({
         isOpen: true,
@@ -77,6 +99,81 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
     } catch (error) {
       console.error("Error fetching meta:", error);
     }
+  };
+
+  const fetchQuestions = async () => {
+    try {
+      const qSnap = await getDocs(collection(db, 'questions'));
+      let allQuestions = qSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      
+      if (allQuestions.length === 0) {
+        for (const q of SAFETY_QUESTIONS) {
+          const docRef = await addDoc(collection(db, 'questions'), q);
+          allQuestions.push({ id: docRef.id, ...q });
+        }
+      }
+      
+      setQuestions(allQuestions);
+    } catch (error) {
+      console.error("Error fetching questions:", error);
+    }
+  };
+
+  const openNewQuestionModal = () => {
+    setEditingQuestion(null);
+    setQFormText('');
+    setQFormOptions(['', '', '', '']);
+    setQFormCorrectIndex(0);
+    setIsQuestionModalOpen(true);
+  };
+
+  const openEditQuestionModal = (q: any) => {
+    setEditingQuestion(q);
+    setQFormText(q.text);
+    setQFormOptions(q.options.length ? q.options : ['', '', '', '']);
+    setQFormCorrectIndex(q.correctIndex);
+    setIsQuestionModalOpen(true);
+  };
+
+  const saveQuestion = async () => {
+    if (!qFormText.trim()) return;
+    try {
+      if (editingQuestion) {
+        await updateDoc(doc(db, 'questions', editingQuestion.id), {
+          text: qFormText,
+          options: qFormOptions,
+          correctIndex: qFormCorrectIndex
+        });
+      } else {
+        await addDoc(collection(db, 'questions'), {
+          text: qFormText,
+          options: qFormOptions,
+          correctIndex: qFormCorrectIndex
+        });
+      }
+      setIsQuestionModalOpen(false);
+      fetchQuestions();
+    } catch (error) {
+      console.error("Save question error:", error);
+    }
+  };
+
+  const deleteQuestion = async (id: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: '삭제 확인',
+      message: '해당 문제를 삭제하시겠습니까?',
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'questions', id));
+          fetchQuestions();
+        } catch (error) {
+          console.error("Delete error:", error);
+        } finally {
+          setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
   };
 
   const addProject = async () => {
@@ -194,11 +291,14 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
     });
   };
 
-  const filteredResults = results.filter(r => 
-    r.supervisorName.toLowerCase().includes(search.toLowerCase()) || 
-    r.contractorName.toLowerCase().includes(search.toLowerCase()) || 
-    r.projectName.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredResults = results.filter(r => {
+    const matchSearch = r.supervisorName.toLowerCase().includes(search.toLowerCase()) || 
+      r.contractorName.toLowerCase().includes(search.toLowerCase()) || 
+      r.projectName.toLowerCase().includes(search.toLowerCase());
+    const matchProject = filterProject === '' || r.projectName === filterProject;
+    const matchContractor = filterContractor === '' || r.contractorName === filterContractor;
+    return matchSearch && matchProject && matchContractor;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -292,6 +392,15 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                     >
                       기본 정보 관리
                     </button>
+                    <button
+                      onClick={() => setActiveTab('questions')}
+                      className={cn(
+                        "rounded-lg px-4 py-2 text-sm font-bold transition-all whitespace-nowrap",
+                        activeTab === 'questions' ? "bg-gray-900 text-white" : "text-gray-500 hover:bg-gray-100"
+                      )}
+                    >
+                      출제 문제 관리
+                    </button>
                   </nav>
 
                   <div className="hidden items-center gap-4 md:flex">
@@ -315,9 +424,9 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
               {activeTab === 'results' ? (
                 <>
                   {/* Stats & Actions */}
-                  <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-                    <div className="flex flex-1 items-center gap-4">
-                      <div className="relative flex-1">
+                  <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div className="flex flex-1 flex-col gap-4 md:flex-row md:items-center">
+                      <div className="relative flex-1 md:max-w-md">
                         <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                         <input
                           type="text"
@@ -350,10 +459,34 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                       <table className="w-full border-collapse text-left">
                         <thead>
                           <tr className="bg-gray-50 text-gray-600">
-                            <th className="px-6 py-4 font-bold">PJT / 협력업체</th>
+                            <th className="px-6 py-4 font-bold">
+                              <select
+                                className="bg-transparent font-bold outline-none cursor-pointer focus:text-gray-900"
+                                value={filterProject}
+                                onChange={(e) => setFilterProject(e.target.value)}
+                              >
+                                <option value="">PJT 전체</option>
+                                {metaData.projects.map(p => (
+                                  <option key={p} value={p}>{p}</option>
+                                ))}
+                              </select>
+                            </th>
+                            <th className="px-6 py-4 font-bold">
+                              <select
+                                className="bg-transparent font-bold outline-none cursor-pointer focus:text-gray-900"
+                                value={filterContractor}
+                                onChange={(e) => setFilterContractor(e.target.value)}
+                              >
+                                <option value="">협력업체 전체</option>
+                                {metaData.contractors.map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                            </th>
                             <th className="px-6 py-4 font-bold">관리감독자 성명</th>
                             <th className="px-6 py-4 font-bold">교육 수료일자</th>
                             <th className="px-6 py-4 font-bold text-center">점수</th>
+                            <th className="px-6 py-4 font-bold text-center">오답 확인</th>
                             <th className="px-6 py-4 font-bold">제출 일시</th>
                             <th className="px-6 py-4 font-bold text-right">관리</th>
                           </tr>
@@ -362,15 +495,17 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                           {loading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                               <tr key={i} className="animate-pulse">
-                                <td colSpan={6} className="px-6 py-6 h-12 bg-gray-50/50"></td>
+                                <td colSpan={8} className="px-6 py-6 h-12 bg-gray-50/50"></td>
                               </tr>
                             ))
                           ) : filteredResults.length > 0 ? (
                             filteredResults.map((res) => (
                               <tr key={res.id} className="hover:bg-gray-50 transition-colors">
-                                <td className="px-6 py-4">
-                                  <div className="font-semibold text-gray-900">{res.projectName}</div>
-                                  <div className="text-xs text-gray-500">{res.contractorName}</div>
+                                <td className="px-6 py-4 font-semibold text-gray-900">
+                                  {res.projectName}
+                                </td>
+                                <td className="px-6 py-4 text-gray-500">
+                                  {res.contractorName}
                                 </td>
                                 <td className="px-6 py-4 text-gray-900 font-medium">{res.supervisorName}</td>
                                 <td className="px-6 py-4">
@@ -400,6 +535,14 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                                     {res.score}점
                                   </span>
                                 </td>
+                                <td className="px-6 py-4 text-center">
+                                  <button
+                                    onClick={() => setDetailsModalResult(res)}
+                                    className="rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-600 transition-colors hover:bg-orange-100"
+                                  >
+                                    오답 보기
+                                  </button>
+                                </td>
                                 <td className="px-6 py-4 text-gray-500 text-xs">
                                   {res.submittedAt ? format(new Date(res.submittedAt), 'yy-MM-dd HH:mm') : '-'}
                                 </td>
@@ -415,7 +558,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                             ))
                           ) : (
                             <tr>
-                              <td colSpan={6} className="px-6 py-20 text-center text-gray-500 font-medium">
+                              <td colSpan={8} className="px-6 py-20 text-center text-gray-500 font-medium">
                                 검색 결과가 없습니다.
                               </td>
                             </tr>
@@ -425,7 +568,7 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                     </div>
                   </div>
                 </>
-              ) : (
+              ) : activeTab === 'meta' ? (
                 <div className="grid gap-8 md:grid-cols-2">
                   {/* Project Management */}
                   <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
@@ -493,6 +636,71 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                     </ul>
                   </div>
                 </div>
+              ) : (
+                <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+                  <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                      <Settings className="h-5 w-5 text-gray-500" /> 출제 문제 관리
+                    </h3>
+                    <div className="flex gap-2 w-full md:w-auto">
+                      <div className="relative flex-1 md:w-64">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="문제 검색..."
+                          className="w-full rounded-xl bg-gray-50 py-2 pl-9 pr-4 text-sm ring-1 ring-gray-200 focus:ring-2 focus:ring-orange-500 outline-none"
+                          value={qSearch}
+                          onChange={(e) => setQSearch(e.target.value)}
+                        />
+                      </div>
+                      <button
+                        onClick={openNewQuestionModal}
+                        className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-black active:scale-95 whitespace-nowrap"
+                      >
+                        <Plus className="h-4 w-4" /> 문제 추가
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                    {questions.filter(q => q.text.toLowerCase().includes(qSearch.toLowerCase())).map((q, idx) => (
+                      <div key={q.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-gray-200">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <h4 className="font-bold text-gray-900 text-sm md:text-base">
+                              Q{idx + 1}. {q.text}
+                            </h4>
+                            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {q.options.map((opt, oIdx) => (
+                                <div key={oIdx} className={cn(
+                                  "rounded-lg px-3 py-2 text-xs font-medium border",
+                                  q.correctIndex === oIdx 
+                                    ? "bg-green-50 border-green-200 text-green-700" 
+                                    : "bg-white border-gray-100 text-gray-600"
+                                )}>
+                                  {String.fromCharCode(65 + oIdx)}. {opt}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <button onClick={() => openEditQuestionModal(q)} className="rounded p-1.5 text-gray-400 hover:bg-white hover:text-orange-500 transition-colors">
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => deleteQuestion(q.id)} className="rounded p-1.5 text-gray-400 hover:bg-white hover:text-red-500 transition-colors">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {questions.filter(q => q.text.toLowerCase().includes(qSearch.toLowerCase())).length === 0 && (
+                      <div className="py-10 text-center text-gray-500">
+                        등록된 문제가 없습니다.
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </main>
           </motion.div>
@@ -534,6 +742,189 @@ export default function AdminDashboard({ onBack }: { onBack: () => void }) {
                   className="flex-1 rounded-xl bg-orange-500 py-3 text-sm font-bold text-white shadow-lg shadow-orange-200 transition-colors hover:bg-orange-600"
                 >
                   확인
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {detailsModalResult && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            >
+              <div className="flex items-center justify-between border-b border-gray-100 p-6">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">오답 상세 내역</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {detailsModalResult.projectName} - {detailsModalResult.supervisorName} ({detailsModalResult.score}점)
+                  </p>
+                </div>
+                <button
+                  onClick={() => setDetailsModalResult(null)}
+                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="space-y-6">
+                  {detailsModalResult.details?.filter(d => !d.isCorrect).length === 0 ? (
+                    <div className="py-10 text-center text-gray-500">
+                      틀린 문제가 없습니다. (100점)
+                    </div>
+                  ) : (
+                    detailsModalResult.details?.filter(d => !d.isCorrect).map((detail, idx) => (
+                      <div key={idx} className="rounded-xl border border-red-100 bg-red-50/30 p-5">
+                        <h4 className="mb-4 text-base font-bold text-gray-900">
+                          Q. {detail.questionText}
+                        </h4>
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <div className="mt-0.5 whitespace-nowrap rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-600">제출한 답</div>
+                            <span className="text-sm text-gray-600 line-through">
+                              {detail.options[detail.selected]}
+                            </span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <div className="mt-0.5 whitespace-nowrap rounded bg-green-100 px-2 py-0.5 text-xs font-bold text-green-600">정답</div>
+                            <span className="text-sm font-semibold text-gray-900">
+                              {detail.options[detail.correctIndex]}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {!detailsModalResult.details && (
+                    <div className="py-10 text-center text-gray-500">
+                      상세 정보가 없습니다 (과거 데이터일 수 있습니다).
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {isQuestionModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
+            >
+              <div className="flex items-center justify-between border-b border-gray-100 p-6">
+                <h3 className="text-xl font-bold text-gray-900">
+                  {editingQuestion ? '문제 수정' : '문제 추가'}
+                </h3>
+                <button
+                  onClick={() => setIsQuestionModalOpen(false)}
+                  className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">문제 내용</label>
+                  <textarea
+                    className="w-full rounded-xl bg-gray-50 p-4 text-sm ring-1 ring-inset ring-gray-200 focus:bg-white focus:ring-2 focus:ring-orange-500 outline-none resize-none h-24"
+                    placeholder="문제를 입력하세요..."
+                    value={qFormText}
+                    onChange={(e) => setQFormText(e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">보기 및 정답 설정</label>
+                  <div className="space-y-3">
+                    {qFormOptions.map((opt, idx) => (
+                      <div key={idx} className="flex items-center gap-3">
+                        <button
+                          onClick={() => setQFormCorrectIndex(idx)}
+                          className={cn(
+                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                            qFormCorrectIndex === idx 
+                              ? "border-green-500 bg-green-500 text-white" 
+                              : "border-gray-300 text-gray-400 hover:border-green-500"
+                          )}
+                        >
+                          {String.fromCharCode(65 + idx)}
+                        </button>
+                        <input
+                          type="text"
+                          className={cn(
+                            "flex-1 rounded-lg px-4 py-2 text-sm outline-none ring-1 transition-all",
+                            qFormCorrectIndex === idx 
+                              ? "bg-green-50 ring-green-500 text-green-900" 
+                              : "bg-gray-50 ring-gray-200 focus:bg-white focus:ring-orange-500"
+                          )}
+                          placeholder={`보기 ${idx + 1} 내용...`}
+                          value={opt}
+                          onChange={(e) => {
+                            const newOpts = [...qFormOptions];
+                            newOpts[idx] = e.target.value;
+                            setQFormOptions(newOpts);
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            if (qFormOptions.length <= 2) return;
+                            const newOpts = [...qFormOptions];
+                            newOpts.splice(idx, 1);
+                            setQFormOptions(newOpts);
+                            if (qFormCorrectIndex >= newOpts.length) setQFormCorrectIndex(newOpts.length - 1);
+                          }}
+                          className="rounded p-2 text-gray-400 hover:text-red-500"
+                          disabled={qFormOptions.length <= 2}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setQFormOptions([...qFormOptions, ''])}
+                    className="mt-3 flex items-center gap-1 text-sm font-semibold text-orange-600 hover:text-orange-700"
+                  >
+                    <Plus className="h-4 w-4" /> 보기 추가
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex gap-2 border-t border-gray-100 p-6 bg-gray-50">
+                <button
+                  onClick={() => setIsQuestionModalOpen(false)}
+                  className="flex-1 rounded-xl bg-white py-3 text-sm font-bold text-gray-700 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-gray-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={saveQuestion}
+                  disabled={!qFormText.trim()}
+                  className="flex-1 rounded-xl bg-orange-500 py-3 text-sm font-bold text-white shadow-lg shadow-orange-200 transition-colors hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  저장하기
                 </button>
               </div>
             </motion.div>
