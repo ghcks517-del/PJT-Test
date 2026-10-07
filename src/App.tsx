@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import SafetyTest from './components/SafetyTest';
 import AdminDashboard from './components/AdminDashboard';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, ShieldCheck, ClipboardList, Info } from 'lucide-react';
 
@@ -9,6 +10,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white">
+      <OfflineIndicator />
       <AnimatePresence mode="wait">
         {view === 'landing' && (
           <motion.div
@@ -32,23 +34,23 @@ export default function App() {
                   className="flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2 text-sm font-bold text-gray-600 transition-all hover:bg-gray-200 hover:text-gray-900"
                 >
                   <Settings className="h-4 w-4" />
-                  관리자 모드
+                  <span>관리자 모드</span>
                 </button>
               </div>
             </header>
 
             {/* Hero Section */}
-            <main className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+            <main className="flex flex-1 flex-col items-center justify-center px-6 py-8 text-center">
               <motion.div
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="max-w-3xl"
+                className="max-w-3xl w-full"
               >
                 <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-orange-50 px-4 py-1.5 text-sm font-bold text-orange-600">
                   <Info className="h-4 w-4" /> 협력업체 관리감독자 필수 교육
                 </div>
-                <h1 className="mb-12 text-5xl font-black leading-tight tracking-tight text-gray-900 md:text-7xl">
+                <h1 className="mb-8 md:mb-12 text-4xl sm:text-5xl font-black leading-tight tracking-tight text-gray-900 md:text-7xl">
                   PJT 협력업체 <br />
                   <span className="text-orange-500">사전 안전 학습 Test</span>
                 </h1>
